@@ -1,15 +1,41 @@
+#[derive(Clone, Debug)]
+pub struct IPSDataRecord {
+    pub offset: u32,
+    pub size: u16,
+    pub payload: Vec<u8>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IPSRLERecord {
+    pub offset: u32,
+    pub size: u16,
+    pub rle_size: u16,
+    pub value: u8,
+}
+
+impl From<&IPSRLERecord> for IPSDataRecord {
+    fn from(rle: &IPSRLERecord) -> IPSDataRecord {
+        IPSDataRecord {
+            offset: rle.offset,
+            size: rle.size,
+            payload: vec![rle.value; rle.rle_size as usize],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum IPSRecord {
-    Data(u32, u16, Vec<u8>),
-    RLE(u32, u16, u16, u8),
+    Data(IPSDataRecord),
+    RLE(IPSRLERecord),
 }
 
 
 impl IPSRecord {
-    pub fn new_with_data(offset: u32, len: u16, data: &[u8]) -> Self {
-        IPSRecord::Data(offset, len, Vec::from(data))
+    pub fn new_with_data(offset: u32, size: u16, data: &[u8]) -> Self {
+        IPSRecord::Data(IPSDataRecord { offset, size, payload: Vec::from(data) } )
     }
 
-    pub fn new_with_rle(offset: u32, len: u16, repeat_len: u16, repeat_byte: u8) -> Self {
-        IPSRecord::RLE(offset, len, repeat_len, repeat_byte)
+    pub fn new_with_rle(offset: u32, size: u16, rle_size: u16, value: u8) -> Self {
+        IPSRecord::RLE(IPSRLERecord { offset, size, rle_size, value })
     }
 }
