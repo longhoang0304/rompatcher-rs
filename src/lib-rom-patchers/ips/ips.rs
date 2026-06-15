@@ -1,7 +1,7 @@
 use std::time::SystemTime;
-use crate::rp_cores::cores::rp_parser::{RPParser, RPParseRecord, RPParseError};
-use crate::rp_cores::cores::rp_patcher::{RPPatchError, RPPatchEvent, RPPatcher};
-use crate::rp_cores::ips::ips_record::{IPSDataRecord, IPSRLERecord, IPSRecord};
+use crate::rp::cores::rp_parser::{RPParser, RPParseRecord, RPParseError};
+use crate::rp::cores::rp_patcher::{RPPatchError, RPPatchEvent, RPPatcher};
+use crate::rp::ips::ips_record::{IPSDataRecord, IPSRLERecord, IPSRecord};
 use crate::utils::byte_reader::ByteReader;
 use crate::utils::read_until::read_until;
 
