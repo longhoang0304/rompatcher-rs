@@ -1,9 +1,8 @@
 use std::time::SystemTime;
 use crate::rp::cores::rp_parser::{RPParser, RPParseRecord, RPParseError};
-use crate::rp::cores::rp_patcher::{RPPatchError, RPPatchEvent, RPPatcher};
+use crate::rp::cores::rp_patcher::{RPPatchError, RPPatchEvent, RPPatchResult, RPPatcher};
 use crate::rp::ips::ips_record::{IPSDataRecord, IPSRLERecord, IPSRecord};
 use crate::utils::byte_reader::ByteReader;
-use crate::utils::read_until::read_until;
 
 pub struct IPS;
 
@@ -11,19 +10,29 @@ impl IPS {
     const HEADER: [u8; 5] = *b"PATCH";
     const FOOTER: [u8; 3] = *b"EOF";
 
-    fn patch_data_record(rom: &mut [u8], patch_record: &IPSDataRecord) -> Result<(), RPPatchError> {
-        let start = patch_record.offset as usize;
-        let size = patch_record.size as usize;
-        let end = start + size;
+    // prevent overflow
+    fn resolve_range(
+        rom_len: usize,
+        offset: u32,
+        len: usize,
+        size: u16,
+    ) -> Result<(usize, usize), RPPatchError> {
+        let start = offset as usize;
+        let end = start
+            .checked_add(len)
+            .filter(|&end| end <= rom_len)
+            .ok_or(RPPatchError::OverflowPatchRecordEof(offset, size, rom_len as u32))?;
 
-        // Check for overflow using the calculated indices
-        if end > rom.len() {
-            return Err(RPPatchError::OverflowPatchRecordEof(
-                patch_record.offset,
-                patch_record.size,
-                rom.len() as u32
-            ));
-        }
+        Ok((start, end))
+    }
+
+    fn patch_data_record(rom: &mut [u8], patch_record: &IPSDataRecord) -> Result<(), RPPatchError> {
+        let (start, end) = Self::resolve_range(
+            rom.len(),
+            patch_record.offset,
+            patch_record.payload.len(),
+            patch_record.size,
+        )?;
 
         rom[start..end].copy_from_slice(&patch_record.payload);
 
@@ -31,7 +40,17 @@ impl IPS {
     }
 
     fn patch_rle_record(rom: &mut [u8], patch_record: &IPSRLERecord) -> Result<(), RPPatchError> {
-        Self::patch_data_record(rom, &patch_record.into())
+        let (start, end) = Self::resolve_range(
+            rom.len(),
+            patch_record.offset,
+            patch_record.rle_size as usize,
+            patch_record.rle_size,
+        )?;
+
+        // Fill in place — no need to materialize a `vec![value; rle_size]`.
+        rom[start..end].fill(patch_record.value);
+
+        Ok(())
     }
 }
 
@@ -48,7 +67,7 @@ impl RPParser<IPSRecord> for IPS {
         } else {
             let rle_size = reader.u16_be()?;
             let value = reader.u8()?;
-            IPSRecord::new_with_rle(offset, size, rle_size, value)
+            IPSRecord::new_with_rle(offset, rle_size, value)
         };
 
         Ok(RPParseRecord::new(record, reader.consumed()))
@@ -62,12 +81,21 @@ impl RPParser<IPSRecord> for IPS {
             return Err(RPParseError::InvalidHeader);
         }
 
-        let body = &patch[Self::HEADER.len()..];
-        let mut body = read_until(body, &Self::FOOTER)
-            .map_err(|_| RPParseError::MissingFooter)?;
-
+        let mut body = &patch[Self::HEADER.len()..];
         let mut records: Vec<IPSRecord> = Vec::new();
-        while !body.is_empty() {
+
+        loop {
+            // read until EOF is met
+            // if an offset is equal to EOF then welp
+            // we are in a bad luck situation
+            let head = body
+                .get(..Self::FOOTER.len())
+                .ok_or(RPParseError::MissingFooter)?;
+
+            if head == Self::FOOTER {
+                break;
+            }
+
             let parsed = Self::parse_record(body)?;
             records.push(parsed.record);
             body = &body[parsed.len..];
@@ -92,7 +120,7 @@ impl RPPatcher<IPSRecord> for IPS {
         )
     }
 
-    fn patch(rom: &[u8], patch_records: &[IPSRecord]) -> Result<Vec<RPPatchEvent<IPSRecord>>, RPPatchError> {
+    fn patch(rom: &[u8], patch_records: &[IPSRecord]) -> Result<RPPatchResult<IPSRecord>, RPPatchError> {
         let mut patched_rom = Vec::from(rom);
         let mut events: Vec<RPPatchEvent<IPSRecord>> = Vec::new();
 
@@ -101,6 +129,11 @@ impl RPPatcher<IPSRecord> for IPS {
             events.push(event)
         }
 
-        Ok(events)
+        Ok(
+            RPPatchResult {
+                events,
+                patched_rom,
+            }
+        )
     }
 }

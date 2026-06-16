@@ -3,7 +3,6 @@ use crate::rp::cores::rp_parser::{RPParser, RPParseRecord, RPParseError};
 use crate::rp::cores::rp_patcher::{RPPatchError, RPPatchEvent, RPPatcher};
 use crate::rp::ups::ups_record::{UPSRecord};
 use crate::utils::byte_reader::ByteReader;
-use crate::utils::read_until::read_until;
 
 pub struct UPS;
 

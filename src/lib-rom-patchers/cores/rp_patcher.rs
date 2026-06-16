@@ -7,6 +7,11 @@ pub struct RPPatchEvent<P> {
     pub patch_record: Box<P>
 }
 
+pub struct RPPatchResult<P> {
+    pub(crate) events: Vec<RPPatchEvent<P>>,
+    pub(crate) patched_rom: Vec<u8>,
+}
+
 #[derive(Debug)]
 pub enum RPPatchError {
     UnexpectedEof,
@@ -26,5 +31,5 @@ impl Error for RPPatchError {}
 
 pub trait RPPatcher<P> {
     fn patch_record(rom: &mut [u8], patch_record: &P) -> Result<RPPatchEvent<P>, RPPatchError>;
-    fn patch(rom: &[u8], patch_records: &[P]) -> Result<Vec<RPPatchEvent<P>>, RPPatchError>;
+    fn patch(rom: &[u8], patch_records: &[P]) -> Result<RPPatchResult<P>, RPPatchError>;
 }
