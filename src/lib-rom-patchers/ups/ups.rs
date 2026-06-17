@@ -21,7 +21,7 @@ impl RPParser<UPS, UPSRecord> for UPS {
         let (offset, vli_read_bytes) = reader.vli_get::<usize>(0)?;
         let payload_offset = vli_read_bytes + 1;
         let payload = reader.get_until_byte(payload_offset, 0x00)?;
-        let size = vli_read_bytes + payload.len();
+        let size = payload_offset + payload.len();
 
         Ok(RPParseRecord::new(
             UPSRecord::new(offset, payload),
@@ -107,7 +107,8 @@ impl RPPatcher<UPS, UPSRecord> for UPS {
 
             events.push(event);
 
-            cursor = write_offset + record.payload.len();
+            // +1 to skips 0x00
+            cursor = write_offset + record.payload.len() + 1;
         }
 
         Ok(RPPatchResult {

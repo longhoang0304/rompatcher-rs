@@ -121,6 +121,30 @@ fn missing_footer_is_an_error() {
     ));
 }
 
+// Offsets are 24-bit big-endian; this exercises the upper bytes that the
+// small-offset tests never touch.
+#[test]
+fn parses_a_large_u24_offset() {
+    let patch = [
+        b'P', b'A', b'T', b'C', b'H', // header
+        0x01, 0x02, 0x03, // offset = 0x010203 = 66051
+        0x00, 0x01, // size = 1
+        0xAA, // payload
+        b'E', b'O', b'F', // footer
+    ];
+
+    let ips = IPS::parse(&patch).expect("patch should parse");
+
+    assert_eq!(ips.records.len(), 1);
+    match &ips.records[0] {
+        IPSRecord::Data(d) => {
+            assert_eq!(d.offset, 0x01_02_03);
+            assert_eq!(d.payload, vec![0xAA]);
+        }
+        other => panic!("expected a data record, got {other:?}"),
+    }
+}
+
 // A record whose declared size runs past the available bytes is a malformed
 // patch, surfaced as UnexpectedEof by the byte reader.
 #[test]

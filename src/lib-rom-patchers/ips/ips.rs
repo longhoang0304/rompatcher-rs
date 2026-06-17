@@ -48,7 +48,6 @@ impl IPS {
             patch_record.rle_size,
         )?;
 
-        // Fill in place — no need to materialize a `vec![value; rle_size]`.
         rom[start..end].fill(patch_record.value);
 
         Ok(())

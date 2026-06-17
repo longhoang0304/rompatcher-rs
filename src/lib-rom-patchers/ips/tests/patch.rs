@@ -96,6 +96,34 @@ fn rle_record_past_end_of_rom_is_an_error() {
     ));
 }
 
+// Boundary: a record whose end lands exactly on rom_len must succeed — guards
+// against an off-by-one (`<` vs `<=`) in resolve_range.
+#[test]
+fn data_record_ending_exactly_at_rom_end_succeeds() {
+    let rom = vec![0u8; 4];
+    let records = vec![IPSRecord::new_with_data(2, 2, &[0xAA, 0xBB])]; // 2 + 2 == 4
+    let ips = IPS {
+        records,
+    };
+
+    let result = IPS::patch(&rom, &ips).expect("patch should apply");
+
+    assert_eq!(result.patched_rom, vec![0, 0, 0xAA, 0xBB]);
+}
+
+#[test]
+fn rle_record_ending_exactly_at_rom_end_succeeds() {
+    let rom = vec![0u8; 4];
+    let records = vec![IPSRecord::new_with_rle(0, 4, 0xCC)]; // 0 + 4 == 4
+    let ips = IPS {
+        records,
+    };
+
+    let result = IPS::patch(&rom, &ips).expect("patch should apply");
+
+    assert_eq!(result.patched_rom, vec![0xCC, 0xCC, 0xCC, 0xCC]);
+}
+
 // End-to-end: parse a patch, then apply it to a blank ROM.
 #[test]
 fn round_trip_parse_then_patch() {
