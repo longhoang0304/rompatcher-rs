@@ -36,4 +36,10 @@ impl CRC32 {
         // invert the bits at the very end
         crc ^ 0xFFFF_FFFF
     }
+
+    pub fn validate(data: &[u8], exp_crc32: u32) -> bool {
+        let crc32 = Self::hash(data);
+
+        exp_crc32 == crc32
+    }
 }
