@@ -12,10 +12,10 @@ fn parses_a_single_data_record() {
         b'E', b'O', b'F', // footer
     ];
 
-    let records = IPS::parse(&patch).expect("patch should parse");
+    let ips = IPS::parse(&patch).expect("patch should parse");
 
-    assert_eq!(records.len(), 1);
-    match &records[0] {
+    assert_eq!(ips.records.len(), 1);
+    match &ips.records[0] {
         IPSRecord::Data(d) => {
             assert_eq!(d.offset, 16);
             assert_eq!(d.size, 3);
@@ -36,10 +36,10 @@ fn parses_an_rle_record() {
         b'E', b'O', b'F', // footer
     ];
 
-    let records = IPS::parse(&patch).expect("patch should parse");
+    let ips = IPS::parse(&patch).expect("patch should parse");
 
-    assert_eq!(records.len(), 1);
-    match &records[0] {
+    assert_eq!(ips.records.len(), 1);
+    match &ips.records[0] {
         IPSRecord::RLE(r) => {
             assert_eq!(r.offset, 5);
             assert_eq!(r.rle_size, 4);
@@ -58,11 +58,11 @@ fn parses_multiple_records_in_order() {
         b'E', b'O', b'F', // footer
     ];
 
-    let records = IPS::parse(&patch).expect("patch should parse");
+    let ips = IPS::parse(&patch).expect("patch should parse");
 
-    assert_eq!(records.len(), 2);
-    assert!(matches!(records[0], IPSRecord::Data(_)));
-    assert!(matches!(records[1], IPSRecord::RLE(_)));
+    assert_eq!(ips.records.len(), 2);
+    assert!(matches!(ips.records[0], IPSRecord::Data(_)));
+    assert!(matches!(ips.records[1], IPSRecord::RLE(_)));
 }
 
 // Regression test for the footer ambiguity: the bytes "EOF" inside a payload
@@ -77,10 +77,10 @@ fn eof_bytes_inside_payload_are_not_treated_as_footer() {
         b'E', b'O', b'F', // footer
     ];
 
-    let records = IPS::parse(&patch).expect("patch should parse");
+    let ips = IPS::parse(&patch).expect("patch should parse");
 
-    assert_eq!(records.len(), 1);
-    match &records[0] {
+    assert_eq!(ips.records.len(), 1);
+    match &ips.records[0] {
         IPSRecord::Data(d) => assert_eq!(d.payload, vec![0x01, b'E', b'O', b'F', 0x02]),
         other => panic!("expected a data record, got {other:?}"),
     }

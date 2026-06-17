@@ -7,8 +7,11 @@ use crate::rp::ips::ips_record::IPSRecord;
 fn applies_a_data_record() {
     let rom = vec![0u8; 8];
     let records = vec![IPSRecord::new_with_data(2, 3, &[0xAA, 0xBB, 0xCC])];
+    let ips = IPS {
+        records,
+    };
 
-    let result = IPS::patch(&rom, &records).expect("patch should apply");
+    let result = IPS::patch(&rom, &ips).expect("patch should apply");
 
     assert_eq!(result.patched_rom, vec![0, 0, 0xAA, 0xBB, 0xCC, 0, 0, 0]);
     assert_eq!(result.events.len(), 1);
@@ -20,8 +23,11 @@ fn applies_a_data_record() {
 fn applies_an_rle_record_without_panicking() {
     let rom = vec![0u8; 8];
     let records = vec![IPSRecord::new_with_rle(2, 4, 0xAB)];
+    let ips = IPS {
+        records,
+    };
 
-    let result = IPS::patch(&rom, &records).expect("patch should apply");
+    let result = IPS::patch(&rom, &ips).expect("patch should apply");
 
     assert_eq!(result.patched_rom, vec![0, 0, 0xAB, 0xAB, 0xAB, 0xAB, 0, 0]);
 }
@@ -32,8 +38,11 @@ fn applies_an_rle_record_without_panicking() {
 fn patch_returns_new_rom_without_mutating_source() {
     let rom = vec![1u8, 2, 3, 4];
     let records = vec![IPSRecord::new_with_data(0, 2, &[0xFF, 0xFF])];
+    let ips = IPS {
+        records,
+    };
 
-    let result = IPS::patch(&rom, &records).expect("patch should apply");
+    let result = IPS::patch(&rom, &ips).expect("patch should apply");
 
     assert_eq!(rom, vec![1, 2, 3, 4], "source rom must be untouched");
     assert_eq!(result.patched_rom, vec![0xFF, 0xFF, 3, 4]);
@@ -46,8 +55,12 @@ fn applies_multiple_records() {
         IPSRecord::new_with_data(0, 2, &[0x11, 0x22]),
         IPSRecord::new_with_rle(4, 3, 0x99),
     ];
+    let ips = IPS {
+        records,
+    };
+    
 
-    let result = IPS::patch(&rom, &records).expect("patch should apply");
+    let result = IPS::patch(&rom, &ips).expect("patch should apply");
 
     assert_eq!(result.patched_rom, vec![0x11, 0x22, 0, 0, 0x99, 0x99, 0x99, 0]);
     assert_eq!(result.events.len(), 2);
@@ -59,9 +72,12 @@ fn applies_multiple_records() {
 fn data_record_past_end_of_rom_is_an_error() {
     let rom = vec![0u8; 4];
     let records = vec![IPSRecord::new_with_data(2, 4, &[1, 2, 3, 4])]; // 2 + 4 > 4
+    let ips = IPS {
+        records,
+    };
 
     assert!(matches!(
-        IPS::patch(&rom, &records),
+        IPS::patch(&rom, &ips),
         Err(RPPatchError::OverflowPatchRecordEof(2, 4, 4))
     ));
 }
@@ -70,9 +86,12 @@ fn data_record_past_end_of_rom_is_an_error() {
 fn rle_record_past_end_of_rom_is_an_error() {
     let rom = vec![0u8; 4];
     let records = vec![IPSRecord::new_with_rle(3, 4, 0xFF)]; // 3 + 4 > 4
+    let ips = IPS {
+        records,
+    };
 
     assert!(matches!(
-        IPS::patch(&rom, &records),
+        IPS::patch(&rom, &ips),
         Err(RPPatchError::OverflowPatchRecordEof(3, 4, 4))
     ));
 }

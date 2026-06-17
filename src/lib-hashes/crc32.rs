@@ -1,7 +1,7 @@
 pub struct CRC32;
 
 impl CRC32 {
-    const POLY: u32 = 0xEDB88320;
+    const POLY: u32 = 0xEDB8_8320;
     const CRC32_TABLE: [u32; 256] = {
         let mut table = [0u32; 256];
         let mut i = 0;

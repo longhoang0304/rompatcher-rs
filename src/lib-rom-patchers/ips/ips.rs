@@ -4,10 +4,11 @@ use crate::rp::cores::rp_patcher::{RPPatchError, RPPatchEvent, RPPatchResult, RP
 use crate::rp::ips::ips_record::{IPSDataRecord, IPSRLERecord, IPSRecord};
 use crate::utils::byte_reader::ByteReader;
 
-pub struct IPS;
+pub struct IPS {
+    pub records: Vec<IPSRecord>,
+}
 
 impl IPS {
-    const HEADER: [u8; 5] = *b"PATCH";
     const FOOTER: [u8; 3] = *b"EOF";
 
     // prevent overflow
@@ -54,32 +55,29 @@ impl IPS {
     }
 }
 
-impl RPParser<IPSRecord> for IPS {
+impl RPParser<IPS, IPSRecord> for IPS {
+    const HEADER: &'static [u8] = b"PATCH";
+    
     fn parse_record(patch: &[u8]) -> Result<RPParseRecord<IPSRecord>, RPParseError> {
         let mut reader = ByteReader::new(patch);
 
-        let offset = reader.u24_be()?;
-        let size = reader.u16_be()?;
+        let offset = reader.u24_be_take()?;
+        let size = reader.u16_be_take()?;
 
         let record = if size != 0 {
             let payload = reader.take(size as usize)?;
             IPSRecord::new_with_data(offset, size, payload)
         } else {
-            let rle_size = reader.u16_be()?;
-            let value = reader.u8()?;
+            let rle_size = reader.u16_be_take()?;
+            let value = reader.u8_take()?;
             IPSRecord::new_with_rle(offset, rle_size, value)
         };
 
         Ok(RPParseRecord::new(record, reader.consumed()))
     }
 
-    fn parse(patch: &[u8]) -> Result<Vec<IPSRecord>, RPParseError> {
-        let header = patch
-            .get(..Self::HEADER.len())
-            .ok_or(RPParseError::UnexpectedEof)?;
-        if header != Self::HEADER {
-            return Err(RPParseError::InvalidHeader);
-        }
+    fn parse(patch: &[u8]) -> Result<IPS, RPParseError> {
+        Self::verify_header(patch)?;
 
         let mut body = &patch[Self::HEADER.len()..];
         let mut records: Vec<IPSRecord> = Vec::new();
@@ -101,11 +99,13 @@ impl RPParser<IPSRecord> for IPS {
             body = &body[parsed.len..];
         }
 
-        Ok(records)
+        Ok(
+            IPS { records }
+        )
     }
 }
 
-impl RPPatcher<IPSRecord> for IPS {
+impl RPPatcher<IPS, IPSRecord> for IPS {
     fn patch_record(rom: &mut [u8], patch_record: &IPSRecord) -> Result<RPPatchEvent<IPSRecord>, RPPatchError> {
         match patch_record {
             IPSRecord::Data(data_record) => Self::patch_data_record(rom, data_record)?,
@@ -120,9 +120,10 @@ impl RPPatcher<IPSRecord> for IPS {
         )
     }
 
-    fn patch(rom: &[u8], patch_records: &[IPSRecord]) -> Result<RPPatchResult<IPSRecord>, RPPatchError> {
+    fn patch(rom: &[u8], patch: &IPS) -> Result<RPPatchResult<IPSRecord>, RPPatchError> {
         let mut patched_rom = Vec::from(rom);
         let mut events: Vec<RPPatchEvent<IPSRecord>> = Vec::new();
+        let patch_records = &patch.records;
 
         for record in patch_records {
             let event = Self::patch_record(&mut patched_rom, record)?;

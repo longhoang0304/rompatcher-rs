@@ -29,7 +29,7 @@ impl fmt::Display for RPPatchError {
 
 impl Error for RPPatchError {}
 
-pub trait RPPatcher<P> {
+pub trait RPPatcher<B, P> {
     fn patch_record(rom: &mut [u8], patch_record: &P) -> Result<RPPatchEvent<P>, RPPatchError>;
-    fn patch(rom: &[u8], patch_records: &[P]) -> Result<RPPatchResult<P>, RPPatchError>;
+    fn patch(rom: &[u8], patch: &B) -> Result<RPPatchResult<P>, RPPatchError>;
 }
