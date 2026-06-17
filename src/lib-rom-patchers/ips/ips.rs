@@ -80,7 +80,7 @@ impl RPParser<IPS, IPSRecord> for IPS {
         Self::verify_header(patch)?;
 
         let mut body = &patch[Self::HEADER.len()..];
-        let mut records: Vec<IPSRecord> = Vec::new();
+        let mut records = Vec::new();
 
         loop {
             // read until EOF is met
@@ -99,9 +99,7 @@ impl RPParser<IPS, IPSRecord> for IPS {
             body = &body[parsed.len..];
         }
 
-        Ok(
-            IPS { records }
-        )
+        Ok(IPS { records })
     }
 }
 
@@ -112,29 +110,24 @@ impl RPPatcher<IPS, IPSRecord> for IPS {
             IPSRecord::RLE(rle_record) => Self::patch_rle_record(rom, rle_record)?,
         }
 
-        Ok(
-            RPPatchEvent {
-                timestamp: SystemTime::now(),
-                patch_record: Box::new(patch_record.clone())
-            }
-        )
+        Ok(RPPatchEvent {
+            timestamp: SystemTime::now(),
+            patch_record: Box::new(patch_record.clone()),
+        })
     }
 
     fn patch(rom: &[u8], patch: &IPS) -> Result<RPPatchResult<IPSRecord>, RPPatchError> {
-        let mut patched_rom = Vec::from(rom);
-        let mut events: Vec<RPPatchEvent<IPSRecord>> = Vec::new();
-        let patch_records = &patch.records;
+        let mut patched_rom = rom.to_vec();
+        let mut events = Vec::new();
 
-        for record in patch_records {
+        for record in &patch.records {
             let event = Self::patch_record(&mut patched_rom, record)?;
-            events.push(event)
+            events.push(event);
         }
 
-        Ok(
-            RPPatchResult {
-                events,
-                patched_rom,
-            }
-        )
+        Ok(RPPatchResult {
+            events,
+            patched_rom,
+        })
     }
 }

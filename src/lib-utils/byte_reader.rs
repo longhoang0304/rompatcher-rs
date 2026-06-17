@@ -38,9 +38,8 @@ impl<'a> ByteReader<'a> {
     }
 
     pub fn take(&mut self, n: usize) -> Result<&'a [u8], ByteReaderError> {
-        let end = self.pos.checked_add(n).ok_or(ByteReaderError::UnexpectedEof)?;
-        let slice = self.data.get(self.pos..end).ok_or(ByteReaderError::UnexpectedEof)?;
-        self.pos = end;
+        let slice = self.get(self.pos, n)?;
+        self.pos += n;
         Ok(slice)
     }
 
@@ -61,42 +60,17 @@ impl<'a> ByteReader<'a> {
     pub fn u32_le_take(&mut self) -> Result<u32, ByteReaderError> {
         let b = self.take(4)?;
         let bytes: [u8; 4] = b.try_into().map_err(|_| ByteReaderError::UnexpectedEof)?;
-        Ok(u32::from_be_bytes(bytes))
+        Ok(u32::from_le_bytes(bytes))
     }
 
     pub fn vli_take<U>(&mut self) -> Result<U, ByteReaderError>
     where U: PrimInt + Unsigned + FromPrimitive + CheckedShl + CheckedAdd,
-        U: From<u8>
+          U: From<u8>
     {
-        let mut value: U = U::zero();
-        let mut shift = 0;
-
-        loop {
-            let byte = self.u8_take()?;
-            let bits: U = (byte & 0x7F).into();
-
-            // value += (byte & 0x7f) << shift
-            let chunk = bits.checked_shl(shift).ok_or(ByteReaderError::ValueOverflow)?;
-
-            // if high bits are dropped -> overflow
-            if chunk.unsigned_shr(shift) != bits {
-                return Err(ByteReaderError::ValueOverflow);
-            }
-
-            // otherwise add
-            value = value.checked_add(&chunk).ok_or(ByteReaderError::ValueOverflow)?;
-
-            // high bit set => final byte (UPS convention)
-            if byte & 0x80 != 0 {
-                return Ok(value);
-            }
-
-            shift += 7;
-
-            // UPS bias: value += 1 << shift
-            let bias = U::one().checked_shl(shift).ok_or(ByteReaderError::ValueOverflow)?;
-            value = value.checked_add(&bias).ok_or(ByteReaderError::ValueOverflow)?;
-        }
+        let (value, read) = self.vli_get::<U>(self.pos)?;
+        // `read` is the count of continuation bytes, so the VLI spans `read + 1` bytes.
+        self.pos += read + 1;
+        Ok(value)
     }
 
     // ======== NO MUTATIONS =========
@@ -152,20 +126,11 @@ impl<'a> ByteReader<'a> {
     }
 
     pub fn get_until_byte(&self, start: usize, exp_byte: u8) -> Result<Vec<u8>, ByteReaderError> {
-        let mut data = Vec::new();
-        let mut start = start;
-
-        loop {
-            let byte = self.u8_get(start)?;
-            if byte == exp_byte {
-                return Ok(data);
-            }
-            data.push(byte);
-
-            start += 1;
-            if start >= self.data.len() {
-                return Err(ByteReaderError::UnexpectedEof);
-            }
-        }
+        let rest = self.data.get(start..).ok_or(ByteReaderError::UnexpectedEof)?;
+        let end = rest
+            .iter()
+            .position(|&byte| byte == exp_byte)
+            .ok_or(ByteReaderError::UnexpectedEof)?;
+        Ok(rest[..end].to_vec())
     }
 }
