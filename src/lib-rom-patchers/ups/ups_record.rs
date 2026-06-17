@@ -1,15 +1,15 @@
 #[derive(Clone, Debug)]
 pub struct UPSRecord {
     pub offset: usize,
-    pub data: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 
 impl UPSRecord {
-    pub fn new(offset: usize, data: Vec<u8>) -> UPSRecord {
+    pub fn new(offset: usize, payload: Vec<u8>) -> UPSRecord {
         UPSRecord {
             offset,
-            data,
+            payload,
         }
     }
 }

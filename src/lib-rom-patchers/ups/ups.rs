@@ -13,7 +13,8 @@ pub struct UPS {
     pub patch_crc32: u32,
 }
 
-impl UPS {}
+impl UPS {
+}
 
 impl RPParser<UPS, UPSRecord> for UPS {
     const HEADER: &'static [u8] = b"UPS1";
@@ -36,8 +37,8 @@ impl RPParser<UPS, UPSRecord> for UPS {
     fn parse(patch: &[u8]) -> Result<UPS, RPParseError> {
         Self::verify_header(patch)?;
 
-        let size_offet = patch.len() - Self::HEADER.len();
-        let sizes = &patch[size_offet..];
+        let size_offset = patch.len() - Self::HEADER.len();
+        let sizes = &patch[size_offset..];
         let mut size_reader = ByteReader::new(sizes);
         let inp_rom_size = size_reader.vli_take::<usize>()?;
         let out_rom_size = size_reader.vli_take::<usize>()?;
@@ -79,11 +80,46 @@ impl RPParser<UPS, UPSRecord> for UPS {
 }
 
 impl RPPatcher<UPS, UPSRecord> for UPS {
-    fn patch_record(rom: &mut [u8], patch_record: &UPSRecord) -> Result<RPPatchEvent<UPSRecord>, RPPatchError> {
-        todo!()
+    fn patch_record(
+        rom: &mut [u8],
+        patch_record: &UPSRecord
+    ) -> Result<RPPatchEvent<UPSRecord>, RPPatchError> {
+        let patch_src = &patch_record.payload;
+        for (rom_byte, patch_byte) in rom.iter_mut().zip(patch_src.iter()) {
+            *rom_byte ^= *patch_byte;
+        }
+
+        Ok(
+            RPPatchEvent {
+                timestamp: SystemTime::now(),
+                patch_record: Box::new(patch_record.clone())
+            }
+        )
     }
 
     fn patch(rom: &[u8], patch: &UPS) -> Result<RPPatchResult<UPSRecord>, RPPatchError> {
-        todo!()
+        let mut patched_rom = Vec::from(rom);
+        let mut events: Vec<RPPatchEvent<UPSRecord>> = Vec::new();
+        let mut cursor = 0;
+
+        let patch_records = &patch.records;
+
+        for record in patch_records {
+            let patched_rom = patched_rom
+                .get_mut(cursor + record.offset..)
+                .ok_or(RPPatchError::UnexpectedEof)?;
+            let event = Self::patch_record(patched_rom, record)?;
+
+            events.push(event);
+
+            cursor += record.offset + record.payload.len() + 1; // +1 for 0x00 byte
+        }
+
+        Ok(
+            RPPatchResult {
+                events,
+                patched_rom,
+            }
+        )
     }
 }
