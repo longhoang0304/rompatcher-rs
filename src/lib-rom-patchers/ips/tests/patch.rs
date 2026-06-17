@@ -1,5 +1,5 @@
 use crate::rp::cores::rp_parser::RPParser;
-use crate::rp::cores::rp_patcher::{RPPatchError, RPPatcher};
+use crate::rp::cores::rp_patcher::RPPatcher;
 use crate::rp::ips::ips::IPS;
 use crate::rp::ips::ips_record::IPSRecord;
 
@@ -66,34 +66,46 @@ fn applies_multiple_records() {
     assert_eq!(result.events.len(), 2);
 }
 
-// Regression test for bug #4: a data record reaching past the ROM end must be
-// reported, not panic on an out-of-bounds slice.
+// A data record reaching past the input ROM grows the output, zero-filling
+// any gap (IPS offsets are 24-bit and may extend the ROM).
 #[test]
-fn data_record_past_end_of_rom_is_an_error() {
+fn data_record_past_end_of_rom_expands_it() {
     let rom = vec![0u8; 4];
     let records = vec![IPSRecord::new_with_data(2, 4, &[1, 2, 3, 4])]; // 2 + 4 > 4
     let ips = IPS {
         records,
     };
 
-    assert!(matches!(
-        IPS::patch(&rom, &ips),
-        Err(RPPatchError::OverflowPatchRecordEof(2, 4, 4))
-    ));
+    let result = IPS::patch(&rom, &ips).expect("patch should expand the rom");
+
+    assert_eq!(result.patched_rom, vec![0, 0, 1, 2, 3, 4]);
 }
 
 #[test]
-fn rle_record_past_end_of_rom_is_an_error() {
+fn rle_record_past_end_of_rom_expands_it() {
     let rom = vec![0u8; 4];
     let records = vec![IPSRecord::new_with_rle(3, 4, 0xFF)]; // 3 + 4 > 4
     let ips = IPS {
         records,
     };
 
-    assert!(matches!(
-        IPS::patch(&rom, &ips),
-        Err(RPPatchError::OverflowPatchRecordEof(3, 4, 4))
-    ));
+    let result = IPS::patch(&rom, &ips).expect("patch should expand the rom");
+
+    assert_eq!(result.patched_rom, vec![0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF]);
+}
+
+// A gap between the input ROM end and a far record is zero-filled.
+#[test]
+fn gap_before_an_expanding_record_is_zero_filled() {
+    let rom = vec![0xAAu8; 2];
+    let records = vec![IPSRecord::new_with_data(5, 2, &[0x11, 0x22])];
+    let ips = IPS {
+        records,
+    };
+
+    let result = IPS::patch(&rom, &ips).expect("patch should expand the rom");
+
+    assert_eq!(result.patched_rom, vec![0xAA, 0xAA, 0, 0, 0, 0x11, 0x22]);
 }
 
 // Boundary: a record whose end lands exactly on rom_len must succeed — guards

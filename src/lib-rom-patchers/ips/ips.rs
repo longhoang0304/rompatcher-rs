@@ -11,6 +11,15 @@ pub struct IPS {
 impl IPS {
     const FOOTER: [u8; 3] = *b"EOF";
 
+    // The byte just past the end of the region a record writes to. IPS offsets
+    // are 24-bit, so a record may legitimately reach beyond the input ROM.
+    fn record_end(record: &IPSRecord) -> usize {
+        match record {
+            IPSRecord::Data(d) => d.offset as usize + d.payload.len(),
+            IPSRecord::RLE(r) => r.offset as usize + r.rle_size as usize,
+        }
+    }
+
     // prevent overflow
     fn resolve_range(
         rom_len: usize,
@@ -116,7 +125,18 @@ impl RPPatcher<IPS, IPSRecord> for IPS {
     }
 
     fn patch(rom: &[u8], patch: &IPS) -> Result<RPPatchResult<IPSRecord>, RPPatchError> {
+        // IPS has no output-size field: the ROM grows to the furthest record,
+        // with any gap zero-filled.
+        let output_len = patch
+            .records
+            .iter()
+            .map(Self::record_end)
+            .max()
+            .unwrap_or(0)
+            .max(rom.len());
+
         let mut patched_rom = rom.to_vec();
+        patched_rom.resize(output_len, 0);
         let mut events = Vec::new();
 
         for record in &patch.records {
